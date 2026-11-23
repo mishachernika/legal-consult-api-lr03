@@ -152,7 +152,7 @@ describe('Lawyers API', () => {
       .set(lawyerUser.auth)
       .send({
         userId: lawyerUser.id,
-        bio: 'Адвокат, 10 років практики',
+        bio: 'Advocate, 10 років практики',
         experienceYears: 10,
         pricePerHour: 800,
         specializationIds: [specId],
@@ -185,7 +185,8 @@ describe('Lawyers API', () => {
     assert.equal(all.status, 200);
     assert.ok(all.body.pagination.total >= 1);
 
-    const filtered = await request(app).get(`/api/lawyers?specializationId=${specId}&minPrice=700&maxPrice=900&search=адвокат`);
+    // Перевіряємо одночасну роботу фільтра за сферою, діапазону ціни й пошуку.
+    const filtered = await request(app).get(`/api/lawyers?specializationId=${specId}&minPrice=700&maxPrice=900&search=Advocate`);
     assert.equal(filtered.status, 200);
     assert.ok(filtered.body.data.length >= 1);
     assert.ok(

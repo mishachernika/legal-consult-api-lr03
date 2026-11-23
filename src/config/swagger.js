@@ -10,7 +10,7 @@ const options = {
         'REST API онлайн-платформи юридичних консультацій. ' +
         'Клієнти створюють запити на консультації, спілкуються з юристом у чаті та залишають відгуки.',
     },
-    servers: [{ url: 'http://localhost:3000', description: 'Локальний сервер розробки' }],
+    servers: [{ url: '/', description: 'Поточний сервер' }],
     tags: [
       { name: 'Health', description: 'Стан сервера' },
       { name: 'Authentication', description: 'Реєстрація, вхід, токени (JWT access/refresh), 2FA, відновлення паролю' },

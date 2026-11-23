@@ -6,7 +6,7 @@
 **Виконав:** Чернік Михайло Богданович, група ІПЗ-41, ВФК НУХТ
 **Викладач:** Юхта О.А.
 **Репозиторій:** https://github.com/mishachernika/legal-consult-api-lr03
-**Розгорнутий застосунок:** налаштовано через `render.yaml` (Render Blueprint) — задеплоїти можна в один клік у dashboard Render (потрібен акаунт); інструкція та обмеження free tier — у `docs/deployment.md`. Локально: `http://localhost:3000`.
+**Розгортання:** підготовлено через `render.yaml` (Render Blueprint); для фактичного розгортання потрібні власний акаунт Render і змінні `DATABASE_URL` / `FRONTEND_URL`. Інструкція та обмеження free tier — у `docs/deployment.md`. Локально: `http://localhost:3000`.
 
 ---
 
@@ -18,7 +18,7 @@
 
 **Що обрано для real-time у предметній області:** чат консультацій (нові повідомлення), зміна статусів консультацій, нові відгуки, нові консультації, онлайн-статус користувачів, персональні сповіщення.
 
-**Рівень 1** — виконано: Socket.io інтегровано (`src/socket/index.js`, піднімається в `server.js` поверх `http.Server`); базове WS-підключення; кімнати (`user:<id>`, `consultation:<id>`); real-time для основної сутності (повідомлення чату `message:new` + статуси консультацій); базові сповіщення; оптимізація БД (індекси + EXPLAIN ANALYZE, кеш); підготовка до деплою (Render blueprint + документація; сам деплой — один клік у чужому акаунті Render).
+**Рівень 1** — виконано: Socket.io інтегровано (`src/socket/index.js`, піднімається в `server.js` поверх `http.Server`); базове WS-підключення; кімнати (`user:<id>`, `consultation:<id>`); real-time для основної сутності (повідомлення чату `message:new` + статуси консультацій); базові сповіщення; оптимізація БД (індекси + EXPLAIN ANALYZE, кеш); підготовка до деплою (Render blueprint + документація). Фактичний зовнішній деплой виконується після надання облікових даних хостингу.
 
 **Рівень 2** — виконано: автентифікація WS через JWT (`io.use` + `handshake.auth.token`, без токена — `connect_error: unauthorized`); персональні сповіщення з типами (`CONSULTATION_CREATED`, `MESSAGE_NEW`, `REVIEW_NEW`, …) і пріоритетами (`LOW/NORMAL/HIGH`), зберігаються в БД (`Notification`) + REST API + real-time у `user:<id>`; real-time для всіх основних сутностей (consultations, messages, reviews, lawyers); онлайн-статус (`presence:update`, `GET /api/users/online`); reconnection з відновленням пропущених подій (outbox `EventOutbox` + `lastEventId` → `events:replay`); комплексна оптимізація: індекси, eager loading (`include` вже всюди), пагінація, кеш із інвалідацією.
 
@@ -33,7 +33,7 @@
 5. **Оптимізація БД.** Лог повільних запитів: `PRISMA_LOG_QUERY=1` у `db.js`. Діагностика через `EXPLAIN ANALYZE` у psql (20 000 демо-рядків): до індексів — `Seq Scan` (Notification: 3.26 мс, EventOutbox: 0.22 мс на LIMIT 100); після міграції `add-realtime-indexes` (`@@index([room, id])`, `@@index([userId, readAt])`, `@@index([createdAt])`) — `Index Scan` (0.07 мс і 0.03 мс відповідно). Логи: `reports/screenshots/lab3-explain-before.txt` / `lab3-explain-after.txt`. N+1 немає — усі списки йдуть з `include` (Prisma робить фіксовану кількість запитів); усі списки мають пагінацію; додано кеш із TTL (catalog lawyers 30 с, specializations 60 с) з версійною інвалідацією при мутаціях; у пам'яті процесу або в Redis при `REDIS_URL`.
 6. **Черги та метрики.** `src/utils/queue.js` — in-process черга (аудит-лог пишемо туди, outbox чистимо раз на годину); `src/utils/metrics.js` + middleware лічильників + `GET /metrics` (ADMIN): uptime, `httpRequestsTotal`, `wsConnections`, `wsEvents`, `wsRateLimited`, `eventsPublished`, `notificationsSent`, `queueEnqueued/Processed`, gauge `onlineUsers`, стан черг.
 7. **Тести.** `tests/socket.test.js` (піднімає `httpServer` на порту 0): відхилення без токена, кімнати (учасник ок / сторонній forbidden), `message:new` у кімнату після REST POST + запис в outbox + сповіщення, replay після «втрати» з'єднання, WS rate limit, presence. `tests/notifications.test.js`: REST сповіщень. Усього **58 тестів, усі green**.
-8. **Деплой.** `render.yaml` (Blueprint: build `npm ci && npx prisma generate`, preDeploy `npx prisma migrate deploy`, start `node src/server.js`, health check `/health`, секрети `generateValue`), `docs/deployment.md` — кроки й обмеження free tier (засинання 15 хв, тимчасова файлова система, БД 30 днів → Neon/Supabase, sticky sessions/Redis-адаптер для кількох інстансів, автомасштабування на платних тарифах). Локально перевірено з Redis: сервер стартує з Redis-адаптером, кеш пишеться в Redis.
+8. **Деплой.** `render.yaml` (Blueprint: build `npm ci && npx prisma generate`, preDeploy `npx prisma migrate deploy`, start `node src/server.js`, health check `/health`, секрети `generateValue`), `docs/deployment.md` — кроки й обмеження free tier (засинання 15 хв, тимчасова файлова система, БД 30 днів → Neon/Supabase, sticky sessions/Redis-адаптер для кількох інстансів, автомасштабування на платних тарифах). Конфігурацію перевірено локально; для створення зовнішнього сервісу необхідні облікові дані Render.
 
 ## 4. Схема БД (нове у ЛР03)
 
@@ -49,7 +49,7 @@ model Notification {
   readAt    DateTime?
   createdAt DateTime             @default(now())
   user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@index([userId, readAt])      // непрочитані користувача
+  @@index([userId, readAt, createdAt(sort: Desc)]) // непрочитані користувача, свіжі спочатку
   @@index([createdAt])
 }
 
@@ -121,7 +121,7 @@ export async function cacheInvalidate(namespace) { /* incr версії namespac
 | `lab3-terminal-npm-test.png` | **знімок вікна Terminal.app**: `npm test` — **tests 58, pass 58, fail 0** |
 | `lab3-terminal-metrics.png` | **знімок вікна Terminal.app**: `GET /metrics` адміном — лічильники, черги, `onlineUsers` |
 | `lab3-swagger.png` | Swagger UI `/api-docs` (група Notifications теж) |
-| `lab3-ws-demo.txt`, `lab3-smoke.txt` (32/32 PASS), `lab3-npm-test.txt`, `lab3-metrics.txt` | ті самі виводи текстом |
+| `lab3-ws-demo.txt`, `lab3-smoke.txt` (33/33 PASS), `lab3-npm-test.txt`, `lab3-metrics.txt` | ті самі виводи текстом |
 | `lab3-explain-before.txt` / `lab3-explain-after.txt` | `EXPLAIN ANALYZE` до і після індексів: `Seq Scan` (3.26 мс / 0.22 мс) → `Index Scan` (0.03 мс / 0.07 мс) |
 
 Сценарії socket-тестів: unauthorized connect; join room як учасник/сторонній; REST POST message → `message:new` у кімнаті + outbox + сповіщення; reconnect із `lastEventId` → `events:replay`; 40 подій → `ws:error RATE_LIMITED`; disconnect → `presence:update online=false`. Локально перевірено і з Redis (`REDIS_URL=redis://localhost:6379`): сервер логує «увімкнено Redis-адаптер».
@@ -141,4 +141,4 @@ export async function cacheInvalidate(namespace) { /* incr версії namespac
 
 ## 8. Висновки
 
-Серверна частина стала real-time: Socket.io з JWT-автентифікацією, кімнатами консультацій і персональними кімнатами, outbox-патерном для гарантованої доставки подій після перепідключення, сповіщеннями з типами/пріоритетами в БД + REST + WS, онлайн-статусом, WS rate limiting. БД оптимізовано індексами (EXPLAIN ANALYZE до/після у звіті), N+1 немає, є кеш із інвалідацією. Додано чергу фонових задач і метрики (`/metrics`). Розгортання підготовлено як Render Blueprint (`render.yaml`) із документацією обмежень free tier; Redis-адаптер і спільний кеш вмикаються змінною `REDIS_URL` (перевірено локально). 58 тестів green, smoke 32/32, WS-демо з двома клієнтами — у скріншотах. Єдиний ручний крок — створення сервісу в акаунті Render (New → Blueprint) і вказати `DATABASE_URL`/`FRONTEND_URL` у змінних середовища; після цього застосунок працює на `https://<service>.onrender.com` (WS — той самий URL).
+Серверна частина стала real-time: Socket.io з JWT-автентифікацією, кімнатами консультацій і персональними кімнатами, outbox-патерном для відновлення прикладних подій після перепідключення, сповіщеннями з типами/пріоритетами в БД + REST + WS, онлайн-статусом, WS rate limiting. БД оптимізовано індексами (EXPLAIN ANALYZE до/після у звіті), N+1 немає, є кеш із інвалідацією. Додано чергу фонових задач і метрики (`/metrics`). Розгортання підготовлено як Render Blueprint (`render.yaml`) із документацією обмежень free tier; Redis-адаптер і спільний кеш вмикаються змінною `REDIS_URL` (перевірено локально). 58 тестів green, smoke 33/33, WS-демо з двома клієнтами — у скріншотах. Для зовнішнього запуску лишається створити сервіс у власному акаунті Render (New → Blueprint) та вказати `DATABASE_URL`/`FRONTEND_URL`; після цього застосунок буде доступний за URL сервісу, а WebSocket — на тому самому URL.

@@ -14,7 +14,7 @@ REST API **онлайн-платформи юридичних консульта
 - WebSocket на тому ж порту, що й HTTP; автентифікація JWT у `handshake.auth.token` (без токена — `connect_error: unauthorized`);
 - кімнати: персональна `user:<id>` (сповіщення) і `consultation:<id>` (чат/статуси; приєднатися можуть лише учасники — `consultation:join` з ack);
 - real-time події для всіх основних сутностей: `consultation:created/updated/deleted`, `message:new`, `review:new/updated/deleted`, `lawyer:updated/deleted`, `notification:new`, `presence:update`;
-- **outbox-патерн**: кожна подія пишеться в `EventOutbox` (порядковий `id`) і розсилається в кімнату; клієнт при перепідключенні передає `auth.lastEventId` і отримує `events:replay` із пропущеними подіями;
+- **outbox-патерн** для прикладних подій: подія спочатку пишеться в `EventOutbox` (порядковий `id`), а потім розсилається в кімнату; клієнт при перепідключенні передає `auth.lastEventId` і отримує `events:replay` із пропущеними подіями;
 - онлайн-статус: `presence:update` + `GET /api/users/online`;
 - rate limiting подій WebSocket (30 подій / 10 с на socket → `ws:error RATE_LIMITED`);
 - сповіщення зберігаються в БД (`Notification`: type, priority, readAt) + REST (`/api/notifications`) + real-time у `user:<id>`;
@@ -48,19 +48,19 @@ REST API **онлайн-платформи юридичних консульта
 
 ## Стек
 
-Node.js 24 · Express 5 · PostgreSQL · Prisma 7 · JWT (jsonwebtoken) · Argon2id · Multer 2 · otplib + qrcode (2FA) · nodemailer · express-rate-limit · helmet · cors · Swagger · node:test + supertest.
+Node.js 24 · Express 5 · Socket.io · PostgreSQL · Prisma 7 · JWT (jsonwebtoken) · Argon2id · Multer 2 · otplib + qrcode (2FA) · nodemailer · express-rate-limit · helmet · cors · Swagger · Redis (опційно) · node:test + supertest.
 
 ## База даних
 
-9 таблиць: `User`, `LawyerProfile`, `Specialization`, `Consultation`, `Message`, `Review`, `File`, `RefreshToken`, `PasswordResetToken`, `AuditLog`. У `User` — хеш пароля й TOTP-секрет; токени зберігаються лише у вигляді SHA-256 хешів.
+12 доменних моделей: `User`, `LawyerProfile`, `Specialization`, `Consultation`, `Message`, `Review`, `File`, `RefreshToken`, `PasswordResetToken`, `AuditLog`, `Notification`, `EventOutbox` (а також службова проміжна таблиця many-to-many Prisma). У `User` — хеш пароля й TOTP-секрет; токени зберігаються лише у вигляді SHA-256 хешів.
 
 ## Як запустити у себе
 
 Потрібні Node.js 24 і PostgreSQL.
 
 ```bash
-git clone https://github.com/mishachernika/legal-consult-api-lr02.git
-cd legal-consult-api-lr02
+git clone https://github.com/mishachernika/legal-consult-api-lr03.git
+cd legal-consult-api-lr03
 npm install
 
 cp .env.example .env          # вказати свій DATABASE_URL і згенерувати секрети
@@ -123,7 +123,7 @@ npm run dev                   # сервер з автоперезапуском
 | GET, PUT, DELETE | `/api/reviews/:id` | публічний / власник+ADMIN | картка / оновити / видалити |
 | POST | `/api/files/upload` · `/api/files/upload-multiple` | токен | завантажити 1 файл / до 5 (multipart) |
 | GET | `/api/files/my` · `/api/files/consultation/:id` | токен | мої файли (пагінація) / файли консультації |
-| GET, DELETE | `/api/files/:id` | публічний / власник+ADMIN | скачати / видалити файл |
+| GET, DELETE | `/api/files/:id` | власник, учасник консультації або ADMIN / власник+ADMIN | скачати / видалити файл |
 | GET | `/api/audit-logs` | ADMIN | журнал дій із пагінацією і фільтрами |
 
 Детальні описи з прикладами — у Swagger UI.
@@ -140,13 +140,13 @@ npm run dev                   # сервер з автоперезапуском
 | `consultation:join` | `consultationId` | `{ok:true}` або `{ok:false,error:"forbidden"}` | приєднатися до кімнати консультації (лише учасник/адмін) |
 | `consultation:leave` | `consultationId` | — | вийти з кімнати |
 
-**Події сервер → клієнт** (у кожній події є `id` — порядковий номер із outbox, його треба зберігати як `lastEventId`):
+**Події сервер → клієнт.** Для прикладних подій із `EventOutbox` поле `id` є порядковим номером, який клієнт зберігає як `lastEventId`. Технічні події присутності та ліміту не зберігаються в outbox і такого `id` не мають:
 
 | Подія | Кімната | Коли | Payload |
 |---|---|---|---|
 | `consultation:created` | `consultation:<id>`, `user:<clientId>`, `user:<lawyerId>` | створення консультації | `{ id, consultation }` |
-| `consultation:updated` | ті самі | зміна (статус/ціна/...) | `{ id, consultation, changed }` |
-| `consultation:deleted` | ті самі | видалення | `{ id }` |
+| `consultation:updated` | `consultation:<id>`, `user:<clientId>`, `user:<lawyerId>` | зміна (статус/ціна/...) | `{ id, consultation, changed }` |
+| `consultation:deleted` | `consultation:<id>`, `user:<clientId>`, `user:<lawyerId>` | видалення | `{ id }` |
 | `message:new` | `consultation:<id>` | нове повідомлення в чаті | `{ id, message }` |
 | `review:new/updated/deleted` | `consultation:<id>`, `user:<lawyerId>` | зміни відгуків | `{ id, review }` |
 | `lawyer:updated/deleted` | broadcast (всі) | зміна каталогу юристів | `{ id, lawyer }` / `{ id }` |
@@ -172,13 +172,13 @@ npm run dev                   # сервер з автоперезапуском
 
 ## Розгортання
 
-Детально — у `docs/deployment.md`, blueprint для Render — у `render.yaml` (free tier; БД — Neon/Supabase, бо безкоштовна БД Render живе 30 днів; WebSocket працює, cold start після засинання компенсується reconnection + replay подій).
+Для розгортання підготовлено Render Blueprint у `render.yaml`; покрокова інструкція — у `docs/deployment.md`. Перед створенням сервісу потрібно вказати власні `DATABASE_URL` і `FRONTEND_URL`. WebSocket працює на тому самому URL, а reconnect після cold start компенсується replay прикладних подій.
 
 ## Тести та перевірка
 
 ```bash
 npm test                  # 58 інтеграційних тестів проти окремої тестової БД (auth, files, API, WebSocket, сповіщення)
-node scripts/smoke.mjs    # 32 smoke-перевірки проти запущеного сервера
+node scripts/smoke.mjs    # 33 smoke-перевірки проти запущеного сервера
 node scripts/ws-demo.mjs   # демо WebSocket: кімнати, real-time чат, сповіщення, presence, replay
 bash scripts/curl-demo.sh # curl-приклади наживо
 ```
@@ -187,19 +187,19 @@ bash scripts/curl-demo.sh # curl-приклади наживо
 
 Swagger UI на `/api-docs`:
 
-![Swagger UI](reports/screenshots/lab2-swagger.png)
+`npm test` у терміналі (58/58):
 
-`npm test` у терміналі (47/47):
+![npm test: 58 тестів без помилок](reports/screenshots/lab3-terminal-npm-test.png)
 
-![npm test](reports/screenshots/lab2-terminal-npm-test.png)
+Smoke-тест наживо, 33/33:
 
-Smoke-тест наживо, 32/32:
+Вивід перевірки збережено у [`reports/screenshots/lab3-smoke.txt`](reports/screenshots/lab3-smoke.txt).
 
-![smoke](reports/screenshots/lab2-terminal-smoke.png)
+### Приклад роботи застосунку — Swagger UI
 
-curl-сесія (реєстрація, вхід, захищені маршрути):
+На знімку — документація запущеного API: публічні й захищені маршрути, JWT-авторизація та предметні групи ендпоінтів. WebSocket-сценарій відтворюється командою `node scripts/ws-demo.mjs`: неавторизоване підключення відхиляється, учасники входять до кімнати консультації, повідомлення приходить у real-time, а після reconnect клієнт отримує `events:replay`.
 
-![curl](reports/screenshots/lab2-terminal-curl.png)
+![Рисунок 1 — Swagger UI онлайн-платформи юридичних консультацій](reports/screenshots/lab3-swagger.png)
 
 ## Структура проєкту
 
