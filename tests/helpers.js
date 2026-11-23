@@ -39,6 +39,8 @@ export async function registerUser(role = 'CLIENT', overrides = {}) {
 }
 
 export async function wipeDatabase() {
+  await prisma.eventOutbox.deleteMany();
+  await prisma.notification.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.passwordResetToken.deleteMany();

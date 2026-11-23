@@ -7,6 +7,8 @@ const DEMO_PASSWORD = 'password123';
 
 async function main() {
   // очищаємо таблиці у порядку, що не порушує зовнішні ключі
+  await prisma.eventOutbox.deleteMany();
+  await prisma.notification.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.passwordResetToken.deleteMany();

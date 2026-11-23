@@ -6,6 +6,8 @@ import { AppError } from '../utils/AppError.js';
 import { assertValid } from '../utils/validate.js';
 import { parseId } from '../utils/params.js';
 import { parsePagination, paginate } from '../utils/pagination.js';
+import { cacheWrap, cacheInvalidate } from '../utils/cache.js';
+import { publishEvent } from '../socket/emitter.js';
 
 const SORTABLE = ['rating', 'pricePerHour', 'experienceYears'];
 
@@ -31,7 +33,11 @@ export async function getLawyers(req, res) {
 
   const { page, limit, skip, take } = parsePagination(req.query);
   const orderBy = { [SORTABLE.includes(sortBy) ? sortBy : 'rating']: order === 'asc' ? 'asc' : 'desc' };
-  const { items, total } = await lawyerModel.findPage({ where, skip, take, orderBy });
+  // кеш каталога (30 с); ключ залежить від фільтрів, інвалідація — версією namespace при змінах
+  const rawKey = JSON.stringify({ where, orderBy, page, limit });
+  const { items, total } = await cacheWrap('lawyers', rawKey, 30, () =>
+    lawyerModel.findPage({ where, skip, take, orderBy })
+  );
   res.json(paginate(items, total, { page, limit }));
 }
 
@@ -96,6 +102,7 @@ export async function createLawyer(req, res) {
   });
   // роль LAWYER отримує лише колишній клієнт — адміністратора не знижуємо
   if (user.role === 'CLIENT') await userModel.setRole(userId, 'LAWYER');
+  await cacheInvalidate('lawyers');
 
   res.status(201).json({ data: lawyer });
 }
@@ -139,6 +146,8 @@ export async function updateLawyer(req, res) {
   }
 
   const lawyer = await lawyerModel.update(id, data);
+  await cacheInvalidate('lawyers');
+  await publishEvent('', 'lawyer:updated', { lawyer }); // broadcast: оновлення каталогу
   res.json({ data: lawyer });
 }
 
@@ -149,5 +158,7 @@ export async function deleteLawyer(req, res) {
   // без профілю юрист стає клієнтом, але адміністратора не знижуємо
   const user = await userModel.findById(lawyer.userId);
   if (user?.role === 'LAWYER') await userModel.setRole(lawyer.userId, 'CLIENT');
+  await cacheInvalidate('lawyers');
+  await publishEvent('', 'lawyer:deleted', { id: lawyer.id });
   res.status(204).end();
 }

@@ -1,4 +1,4 @@
-# Лабораторна робота 02 — Аутентифікація, авторизація та розширений функціонал
+# Лабораторна робота 03 — Взаємодія в реальному часі та фіналізація серверної частини (WebSocket + деплой)
 ## Автор
 
 Чернік Михайло Богданович, група ІПЗ-41, Волинський фаховий коледж НУХТ
@@ -8,6 +8,18 @@ REST API **онлайн-платформи юридичних консульта
 Зроблено на Node.js 24 (ES-модулі) + Express 5, дані — PostgreSQL через Prisma 7, документація API — Swagger на `/api-docs`, тести — вбудований `node:test` + supertest.
 
 ## Що вміє API
+
+### Real-time (ЛР03, Socket.io)
+
+- WebSocket на тому ж порту, що й HTTP; автентифікація JWT у `handshake.auth.token` (без токена — `connect_error: unauthorized`);
+- кімнати: персональна `user:<id>` (сповіщення) і `consultation:<id>` (чат/статуси; приєднатися можуть лише учасники — `consultation:join` з ack);
+- real-time події для всіх основних сутностей: `consultation:created/updated/deleted`, `message:new`, `review:new/updated/deleted`, `lawyer:updated/deleted`, `notification:new`, `presence:update`;
+- **outbox-патерн**: кожна подія пишеться в `EventOutbox` (порядковий `id`) і розсилається в кімнату; клієнт при перепідключенні передає `auth.lastEventId` і отримує `events:replay` із пропущеними подіями;
+- онлайн-статус: `presence:update` + `GET /api/users/online`;
+- rate limiting подій WebSocket (30 подій / 10 с на socket → `ws:error RATE_LIMITED`);
+- сповіщення зберігаються в БД (`Notification`: type, priority, readAt) + REST (`/api/notifications`) + real-time у `user:<id>`;
+- при `REDIS_URL` — Redis-адаптер Socket.io (горизонтальне масштабування) і спільний кеш.
+
 
 ### Аутентифікація та авторизація (ЛР02)
 
@@ -116,11 +128,58 @@ npm run dev                   # сервер з автоперезапуском
 
 Детальні описи з прикладами — у Swagger UI.
 
+
+## WebSocket API (Socket.io)
+
+Підключення: `io(url, { auth: { token: <accessToken>, lastEventId: <id останньої отриманої події> } })`. Без валідного токена — `connect_error: "unauthorized"`. CORS — за `FRONTEND_URL`.
+
+**Події клієнт → сервер:**
+
+| Подія | Аргументи | Ack | Опис |
+|---|---|---|---|
+| `consultation:join` | `consultationId` | `{ok:true}` або `{ok:false,error:"forbidden"}` | приєднатися до кімнати консультації (лише учасник/адмін) |
+| `consultation:leave` | `consultationId` | — | вийти з кімнати |
+
+**Події сервер → клієнт** (у кожній події є `id` — порядковий номер із outbox, його треба зберігати як `lastEventId`):
+
+| Подія | Кімната | Коли | Payload |
+|---|---|---|---|
+| `consultation:created` | `consultation:<id>`, `user:<clientId>`, `user:<lawyerId>` | створення консультації | `{ id, consultation }` |
+| `consultation:updated` | ті самі | зміна (статус/ціна/...) | `{ id, consultation, changed }` |
+| `consultation:deleted` | ті самі | видалення | `{ id }` |
+| `message:new` | `consultation:<id>` | нове повідомлення в чаті | `{ id, message }` |
+| `review:new/updated/deleted` | `consultation:<id>`, `user:<lawyerId>` | зміни відгуків | `{ id, review }` |
+| `lawyer:updated/deleted` | broadcast (всі) | зміна каталогу юристів | `{ id, lawyer }` / `{ id }` |
+| `notification:new` | `user:<id>` | нове сповіщення | `{ id, notification }` |
+| `presence:update` | broadcast | користувач онлайн/офлайн | `{ userId, online }` |
+| `events:replay` | особисто клієнту | при підключенні з `lastEventId` | масив `{ id, event, room, payload }` |
+| `ws:error` | особисто клієнту | rate limit подій | `{ code: "RATE_LIMITED", message }` |
+
+Приклад клієнта — `scripts/ws-demo.mjs`.
+
+## Сповіщення (REST)
+
+| Метод | Шлях | Опис |
+|---|---|---|
+| GET | `/api/notifications?unread=true&page=&limit=` | мої сповіщення (у відповіді `unreadCount`) |
+| POST | `/api/notifications/:id/read` | позначити прочитаним |
+| POST | `/api/notifications/read-all` | прочитати всі |
+| DELETE | `/api/notifications/:id` | видалити |
+
+## Моніторинг
+
+`GET /metrics` (ADMIN) — uptime, лічильники HTTP/WS/подій/сповіщень/черг, gauge `onlineUsers`, стан черг. `GET /health` — для health check хостингу.
+
+## Розгортання
+
+Детально — у `docs/deployment.md`, blueprint для Render — у `render.yaml` (free tier; БД — Neon/Supabase, бо безкоштовна БД Render живе 30 днів; WebSocket працює, cold start після засинання компенсується reconnection + replay подій).
+
 ## Тести та перевірка
 
 ```bash
-npm test                  # 47 інтеграційних тестів проти окремої тестової БД (auth, files, API)
+npm test                  # 58 інтеграційних тестів проти окремої тестової БД (auth, files, API, WebSocket, сповіщення)
 node scripts/smoke.mjs    # 32 smoke-перевірки проти запущеного сервера
+node scripts/ws-demo.mjs   # демо WebSocket: кімнати, real-time чат, сповіщення, presence, replay
 bash scripts/curl-demo.sh # curl-приклади наживо
 ```
 
@@ -156,10 +215,14 @@ curl-сесія (реєстрація, вхід, захищені маршрут
 │   ├── app.js               # збирання застосунку (без listen): helmet, cors, rate limit, audit
 │   ├── server.js            # запуск сервера
 │   └── db.js                # єдиний екземпляр PrismaClient (PrismaPg adapter)
-├── tests/                   # auth.test.js, files.test.js, api.test.js, helpers.js
-├── scripts/                 # smoke.mjs, curl-demo.sh
+├── src/socket/              # Socket.io: auth, rooms, presence, outbox-еміти, WS rate limit, Redis-адаптер
+├── src/services/            # notificationService (БД + real-time доставка)
+├── tests/                   # auth, files, api, socket, notifications + helpers.js
+├── scripts/                 # smoke.mjs, ws-demo.mjs, curl-demo.sh
+├── docs/deployment.md       # деплой на Render (кроки, обмеження free tier)
+├── render.yaml              # Blueprint для Render
 ├── reports/                 # звіти лабораторних + скріншоти
 └── .github/workflows/       # CI: тести на кожен push (Node 24 + PostgreSQL 17)
 ```
 
-Звіт з ЛР01 — у `reports/lab1-report.md`, звіт з ЛР02 — у `reports/lab2-report.md`.
+Звіти: `reports/lab1-report.md`, `reports/lab2-report.md`, `reports/lab3-report.md`.

@@ -5,11 +5,26 @@ import {
   createUser,
   updateUser,
   deleteUser,
+  getOnlineUsers,
 } from '../controllers/userController.js';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 
 const router = Router();
+
+/**
+ * @swagger
+ * /api/users/online:
+ *   get:
+ *     summary: Список id користувачів, які зараз онлайн (WebSocket)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Масив id онлайн-користувачів }
+ *       401: { description: Необхідна аутентифікація }
+ */
+router.get('/online', authenticate, getOnlineUsers);
 
 /**
  * @swagger

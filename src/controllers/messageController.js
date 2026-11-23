@@ -3,6 +3,8 @@ import { messageModel } from '../models/messageModel.js';
 import { AppError } from '../utils/AppError.js';
 import { assertValid } from '../utils/validate.js';
 import { parseId } from '../utils/params.js';
+import { publishEvent } from '../socket/emitter.js';
+import { createNotification } from '../services/notificationService.js';
 
 function assertParticipant(req, consultation) {
   if (
@@ -40,5 +42,18 @@ export async function createMessage(req, res) {
     senderId: req.user.userId,
     text,
   });
+
+  // real-time: нове повідомлення всім у кімнаті consultation:<id> + сповіщення другому учаснику
+  await publishEvent(`consultation:${consultationId}`, 'message:new', { message });
+  const otherUserId = consultation.clientId === req.user.userId ? consultation.lawyerId : consultation.clientId;
+  await createNotification({
+    userId: otherUserId,
+    type: 'MESSAGE_NEW',
+    priority: 'NORMAL',
+    title: 'Нове повідомлення в чаті',
+    body: text.length > 120 ? `${text.slice(0, 120)}…` : text,
+    data: { consultationId, messageId: message.id },
+  });
+
   res.status(201).json({ data: message });
 }

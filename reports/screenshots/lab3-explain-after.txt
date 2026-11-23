@@ -1,0 +1,28 @@
+# EXPLAIN ANALYZE ПІСЛЯ індексів: @@index([room, id]) на EventOutbox, @@index([userId, readAt]) + [createdAt] на Notification
+(для прикладу в таблицях по 20 000 демо-рядків)
+
+## 1) Replay подій outbox: WHERE room = ... AND id > 5000 ORDER BY id LIMIT 100 → індекс [room, id]
+\$ EXPLAIN ANALYZE SELECT id, event, payload FROM "EventOutbox" WHERE room = 'consultation:7' AND id > 5000 ORDER BY id LIMIT 100;
+
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.29..107.75 rows=100 width=45) (actual time=0.014..0.054 rows=100 loops=1)
+   ->  Index Scan using "EventOutbox_room_id_idx" on "EventOutbox"  (cost=0.29..1074.95 rows=1000 width=45) (actual time=0.014..0.049 rows=100 loops=1)
+         Index Cond: ((room = 'consultation:7'::text) AND (id > 5000))
+ Planning Time: 0.223 ms
+ Execution Time: 0.070 ms
+(5 rows)
+
+
+## 2) Непрочитані сповіщення користувача → індекс [createdAt] / [userId, readAt]
+\$ EXPLAIN ANALYZE SELECT * FROM "Notification" WHERE "userId" = 23 AND "readAt" IS NULL ORDER BY "createdAt" DESC LIMIT 20;
+
+                                                                              QUERY PLAN                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.29..1.65 rows=20 width=101) (actual time=0.009..0.011 rows=20 loops=1)
+   ->  Index Scan Backward using "Notification_createdAt_idx" on "Notification"  (cost=0.29..1367.29 rows=20000 width=101) (actual time=0.008..0.010 rows=20 loops=1)
+         Filter: (("readAt" IS NULL) AND ("userId" = 23))
+ Planning Time: 0.208 ms
+ Execution Time: 0.026 ms
+(5 rows)
+

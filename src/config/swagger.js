@@ -21,6 +21,7 @@ const options = {
       { name: 'Reviews', description: 'Відгуки клієнтів про завершені консультації' },
       { name: 'Files', description: 'Завантаження та керування файлами (Multer, валідація типу і розміру)' },
       { name: 'Audit', description: 'Журнал дій користувачів (доступний лише адміністратору)' },
+      { name: 'Notifications', description: 'Сповіщення користувачів (БД + доставка через WebSocket у кімнату user:<id>)' },
     ],
     components: {
       schemas: {

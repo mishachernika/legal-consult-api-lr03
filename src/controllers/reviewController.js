@@ -5,6 +5,9 @@ import { AppError } from '../utils/AppError.js';
 import { assertValid } from '../utils/validate.js';
 import { parseId } from '../utils/params.js';
 import { parsePagination, paginate } from '../utils/pagination.js';
+import { publishEvent } from '../socket/emitter.js';
+import { createNotification } from '../services/notificationService.js';
+import { cacheInvalidate } from '../utils/cache.js';
 
 // Перераховує середній рейтинг профілю юриста за всіма відгуками
 async function recalcLawyerRating(lawyerId) {
@@ -67,6 +70,18 @@ export async function createReview(req, res) {
     text,
   });
   await recalcLawyerRating(consultation.lawyerId);
+  await cacheInvalidate('lawyers'); // рейтинг у каталозі змінився
+
+  await publishEvent(`consultation:${consultationId}`, 'review:new', { review });
+  await publishEvent(`user:${consultation.lawyerId}`, 'review:new', { review });
+  await createNotification({
+    userId: consultation.lawyerId,
+    type: 'REVIEW_NEW',
+    priority: 'NORMAL',
+    title: 'Новий відгук',
+    body: `Оцінка ${rating}/5: ${text ? (text.length > 100 ? `${text.slice(0, 100)}…` : text) : 'без тексту'}`,
+    data: { consultationId, reviewId: review.id, rating },
+  });
 
   res.status(201).json({ data: review });
 }
@@ -93,6 +108,8 @@ export async function updateReview(req, res) {
 
   const review = await reviewModel.update(id, data);
   await recalcLawyerRating(review.lawyerId);
+  await cacheInvalidate('lawyers');
+  await publishEvent(`consultation:${review.consultationId}`, 'review:updated', { review });
   res.json({ data: review });
 }
 
@@ -106,5 +123,7 @@ export async function deleteReview(req, res) {
 
   const review = await reviewModel.remove(id);
   await recalcLawyerRating(review.lawyerId);
+  await cacheInvalidate('lawyers');
+  await publishEvent(`consultation:${review.consultationId}`, 'review:deleted', { id: review.id });
   res.status(204).end();
 }

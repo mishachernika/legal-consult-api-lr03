@@ -1,0 +1,31 @@
+# EXPLAIN ANALYZE ДО індексів (у таблицях по 20 000 демо-рядків)
+
+## 1) Події кімнати outbox (replay при перепідключенні)
+\$ EXPLAIN ANALYZE SELECT id, event, payload FROM "EventOutbox" WHERE room = 'consultation:7' LIMIT 100;
+
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.00..49.70 rows=100 width=45) (actual time=0.012..0.189 rows=100 loops=1)
+   ->  Seq Scan on "EventOutbox"  (cost=0.00..497.00 rows=1000 width=45) (actual time=0.011..0.183 rows=100 loops=1)
+         Filter: (room = 'consultation:7'::text)
+         Rows Removed by Filter: 1886
+ Planning Time: 0.390 ms
+ Execution Time: 0.220 ms
+(6 rows)
+
+
+## 2) Непрочитані сповіщення користувача
+\$ EXPLAIN ANALYZE SELECT * FROM "Notification" WHERE "userId" = 23 AND "readAt" IS NULL ORDER BY "createdAt" DESC LIMIT 20;
+
+                                                           QUERY PLAN                                                           
+--------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=949.19..949.24 rows=20 width=101) (actual time=3.208..3.211 rows=20 loops=1)
+   ->  Sort  (cost=949.19..999.19 rows=20000 width=101) (actual time=3.206..3.208 rows=20 loops=1)
+         Sort Key: "createdAt" DESC
+         Sort Method: top-N heapsort  Memory: 26kB
+         ->  Seq Scan on "Notification"  (cost=0.00..417.00 rows=20000 width=101) (actual time=0.016..1.969 rows=20000 loops=1)
+               Filter: (("readAt" IS NULL) AND ("userId" = 23))
+ Planning Time: 0.554 ms
+ Execution Time: 3.257 ms
+(8 rows)
+

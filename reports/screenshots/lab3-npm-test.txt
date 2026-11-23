@@ -1,0 +1,121 @@
+
+> legal-consult-api@1.0.0 test
+> npm run db:test && NODE_ENV=test node --env-file-if-exists=.env.test --test --test-concurrency=1 "tests/**/*.test.js"
+
+
+> legal-consult-api@1.0.0 db:test
+> NODE_ENV=test prisma migrate deploy && NODE_ENV=test prisma generate
+
+◇ injected env (12) from .env.test
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+Datasource "db": PostgreSQL database "legal_consult_test", schema "public" at "localhost:5433"
+
+5 migrations found in prisma/migrations
+
+
+No pending migrations to apply.
+◇ injected env (12) from .env.test
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+
+✔ Generated Prisma Client (7.10.1) to ./src/generated/prisma in 46ms
+
+▶ Health
+  ✔ GET /health повертає статус ok (1.270625ms)
+✔ Health (297.820667ms)
+▶ Users API (захищено токеном)
+  ✔ GET /api/users без токена → 401 (1.104458ms)
+  ✔ GET /api/users звичайний користувач → 403, адмін → пагінований список без паролів (10.649625ms)
+  ✔ GET /api/users/:id чужа картка → без email/phone; своя → повна (8.012125ms)
+  ✔ GET /api/users?role=LAWYER&search= фільтр + пошук (5.624208ms)
+  ✔ POST /api/users без токена → 401, звичайний користувач → 403, адмін → 201 (37.355833ms)
+  ✔ PUT /api/users/:id — власник ок, чужий → 403, роль змінює лише адмін (29.428792ms)
+  ✔ DELETE /api/users/:id — лише адмін, 204 → повторно 404 (30.127334ms)
+✔ Users API (захищено токеном) (122.635792ms)
+▶ Specializations API
+  ✔ GET публічний, POST без токена → 401, адмін → 201, дубль → 409 (7.291625ms)
+✔ Specializations API (7.393ms)
+▶ Lawyers API
+  ✔ POST /api/lawyers — свій профіль → 201 і роль стала LAWYER; чужий → 403 (12.973375ms)
+  ✔ POST повторно для того самого userId → 409; невідома спеціалізація → 400 (55.012041ms)
+  ✔ GET /api/lawyers — пагінація, пошук, фільтр за спеціалізацією і ціною (9.348458ms)
+  ✔ PUT /api/lawyers/:id — власник ок, чужий → 403; isVerified лише адмін (12.826375ms)
+  ✔ адмін створює профіль юриста для себе — роль лишається ADMIN (61.031334ms)
+  ✔ GET /api/lawyers/:id — картка з відгуками і лічильником консультацій; 404 для чужого id (3.270084ms)
+✔ Lawyers API (156.069292ms)
+▶ Consultations + Messages API
+  ✔ POST /api/consultations без токена → 401; клієнт створює для себе → 201, PENDING, ціна = ставка юриста (7.002792ms)
+  ✔ POST /api/consultations із price від клієнта → 403 (ціну задає лише юрист/адмін) (0.932875ms)
+  ✔ GET /api/consultations — клієнт бачить лише свої, пошук працює (61.123958ms)
+  ✔ GET /api/consultations/:id сторонній → 403, учасник → 200 (58.801042ms)
+  ✔ PUT клієнт редагує PENDING і може скасувати; юрист змінює статус (11.201459ms)
+  ✔ чат: сторонній → 403, учасник → 201, історія читається (58.254541ms)
+  ✔ DELETE консультації: сторонній → 403, адмін → 204 (55.32875ms)
+✔ Consultations + Messages API (252.865375ms)
+▶ Reviews API
+  ✔ відгук до завершення → 400; після COMPLETED клієнт → 201, дубль → 409, чужий → 403 (68.396292ms)
+  ✔ рейтинг поза 1-5 → 400; GET з пагінацією і фільтром; PUT чужого → 403, свій → 200 (67.756375ms)
+  ✔ DELETE консультації з відгуком → рейтинг юриста перераховується (11.657375ms)
+✔ Reviews API (147.938541ms)
+▶ Audit log
+  ✔ запити потрапляють у журнал, доступ лише адміну (2.273958ms)
+✔ Audit log (2.336083ms)
+▶ Обробка помилок
+  ✔ невідомий маршрут → 404 у форматі JSON (0.558833ms)
+  ✔ невалідний id у шляху → 400 (0.508959ms)
+  ✔ невалідний токен → 401 (0.441625ms)
+✔ Обробка помилок (1.583416ms)
+▶ Authentication API
+  ✔ реєстрація: 201, токени, без пароля у відповіді (65.580334ms)
+  ✔ дубль email → 409 (3.2115ms)
+  ✔ короткий пароль → 400 (1.63875ms)
+  ✔ вхід із правильним паролем → 200 + токени (28.679958ms)
+  ✔ хибний пароль і невідомий email → однакова 401 (26.515ms)
+  ✔ GET /api/auth/me без токена → 401, з токеном → 200 (59.515375ms)
+  ✔ refresh: ротація, старий токен відкликано, повторне використання відкликає всі сесії (61.959333ms)
+  ✔ logout відкликає refresh токен (53.527875ms)
+  ✔ change-password: хибний поточний → 401, успіх → старі сесії відкликано, новий пароль працює (166.441875ms)
+[dev-mail] Кому: reset@example.com
+Тема: Відновлення паролю — Legal Consult
+Вітаємо! Ви запросили скидання паролю. Перейдіть за посиланням (діє 1 годину):
+http://localhost:5173/reset-password?token=96c545eca769019f38975f11e967a41bd4ffcf113b9d2f1497887b6764b9ee6a
+
+Якщо ви не запитували скидання — просто проігноруйте цей лист.
+  ✔ forgot/reset-password: токен із БД скидає пароль, повторне використання → 400 (107.156042ms)
+  ✔ 2FA: enable → confirm кодом → login вимагає totp → disable (169.945709ms)
+  ✔ 2FA confirm із хибним кодом → 400 (57.477083ms)
+✔ Authentication API (867.5345ms)
+▶ Files API
+  ✔ upload без токена → 401 (17.902166ms)
+  ✔ завантаження PNG → 201, отримання файлу → 200, чужий delete → 403, свій → 200 (143.31475ms)
+  ✔ .exe відхиляється (MIME + розширення), завеликий файл → 400 «Файл занадто великий» (71.126541ms)
+  ✔ підроблений вміст: .png із начинкою exe → 400 (магічні байти) (60.655708ms)
+  ✔ upload-multiple: кілька файлів одразу (files[]), /my повертає пагінований список (56.29275ms)
+  ✔ файли консультації: учасник бачить, сторонній → 403; прив’язка чужої консультації → 403 (235.06925ms)
+✔ Files API (649.5705ms)
+▶ Notifications API
+  ✔ без токена → 401 (1.277542ms)
+  ✔ створення консультації → у юриста з’являється сповіщення (unread) (16.994333ms)
+  ✔ POST /:id/read → прочитано; POST /read-all → всі прочитані (17.953833ms)
+  ✔ чуже сповіщення → 403; DELETE свого → 204 (7.621541ms)
+✔ Notifications API (273.451917ms)
+▶ WebSocket (Socket.io)
+  ✔ підключення без токена → connect_error unauthorized (10.625458ms)
+  ✔ підключення з токеном → connect, присутність, персональна кімната (6.111ms)
+  ✔ consultation:join — учасник ок, сторонній → ok:false (11.478042ms)
+  ✔ POST /messages (REST) → подія message:new у кімнаті + outbox + сповіщення адресату (17.290625ms)
+  ✔ replay: перепідключення з lastEventId → events:replay із пропущеними подіями (23.165375ms)
+  ✔ rate limiting подій WebSocket: після 30 подій за 10 с → ws:error RATE_LIMITED (8.466ms)
+  ✔ presence:update — відключення позначає користувача офлайн (363.050417ms)
+✔ WebSocket (Socket.io) (731.516959ms)
+ℹ tests 58
+ℹ suites 12
+ℹ pass 58
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4756.575375

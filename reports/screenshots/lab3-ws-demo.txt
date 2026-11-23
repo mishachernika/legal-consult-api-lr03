@@ -1,0 +1,24 @@
+WS-демо проти http://localhost:3000
+
+вхід: клієнт id=27
+консультація id=12 («Розірвання шлюбу та поділ майна»), юрист Шевченко Олена Петрівна (id=25)
+підключення без токена → connect_error: unauthorized
+обидва клієнти підключені (JWT у handshake.auth.token)
+presence:update user=25 online=true
+consultation:join 12 → ack {"ok":true}
+
+юрист надсилає повідомлення через REST POST /api/consultations/:id/messages ...
+[клієнт] message:new #60005: Добрий день! Так, можемо обговорити деталі договору.
+[юрист] message:new #60005: Добрий день! Так, можемо обговорити деталі договору.
+[клієнт] notification:new: Нове повідомлення в чаті (priority=NORMAL)
+REST відповідь: 201
+[юрист] message:new #60007: Це повідомлення клієнт пропустив, поки був офлайн.
+
+replay: перепідключення з lastEventId=60005 → events:replay (3 подій):
+  #60006 notification:new room=user:27 ()
+  #60007 message:new room=consultation:12 (Це повідомлення клієнт пропустив, поки був офлайн.)
+  #60008 notification:new room=user:27 ()
+
+GET /api/users/online → [25,27]
+
+готово

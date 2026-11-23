@@ -1,0 +1,51 @@
+# Render Blueprint: один клік у dashboard Render → New → Blueprint → цей репозиторій.
+# Безкоштовний тариф (free): вебсервіс «засинає» після 15 хв без запитів (холодний старт до ~1 хв,
+# WebSocket при цьому розривається — клієнт Socket.io перепідключається автоматично, а пропущені
+# події добираються через lastEventId/outbox); файлова система тимчасова (завантажені файли зникають
+# після redeploy — для продакшну потрібне S3-сховище); безкоштовна БД Render живе лише 30 днів,
+# тому DATABASE_URL вказуємо від зовнішнього постачальника (Neon/Supabase free tier, безстроково).
+services:
+  - type: web
+    name: legal-consult-api-lr03
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci && npx prisma generate
+    preDeployCommand: npx prisma migrate deploy
+    startCommand: node src/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      # Секрети згенеруються автоматично (generateValue), або задайте свої у dashboard:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: REFRESH_TOKEN_SECRET
+        generateValue: true
+      - key: REFRESH_TOKEN_EXPIRES_IN
+        value: 7d
+      # DATABASE_URL задається вручну у dashboard (Neon/Supabase/...):
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false # адреса фронтенду (Vercel/Netlify), потрібна для CORS і Socket.io
+      - key: UPLOAD_DIR
+        value: uploads
+      - key: MAX_FILE_SIZE
+        value: 5242880
+      - key: RATE_LIMIT
+        value: 100
+      - key: AUTH_RATE_LIMIT
+        value: 10
+      - key: WS_RATE_LIMIT
+        value: 30
+      # Опціонально для горизонтального масштабування (кілька інстансів) і спільного кешу:
+      # - key: REDIS_URL
+      #   sync: false # наприклад, Upstash free tier
+      # SMTP для листів відновлення паролю (інакше листи йдуть у лог сервера):
+      # - key: SMTP_URL
+      #   sync: false

@@ -21,6 +21,21 @@ enum ConsultationStatus {
   CANCELLED
 }
 
+enum NotificationType {
+  CONSULTATION_CREATED
+  CONSULTATION_UPDATED
+  CONSULTATION_CANCELLED
+  MESSAGE_NEW
+  REVIEW_NEW
+  SYSTEM
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
 model User {
   id           Int       @id @default(autoincrement())
   email        String    @unique
@@ -44,6 +59,7 @@ model User {
   refreshTokens         RefreshToken[]
   resetTokens           PasswordResetToken[]
   auditLogs             AuditLog[]
+  notifications         Notification[]
 
   @@index([role])
 }
@@ -169,6 +185,38 @@ model PasswordResetToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// Сповіщення користувача (зберігаємо в БД + доставляємо через WebSocket у кімнату user:<id>)
+model Notification {
+  id        Int                  @id @default(autoincrement())
+  userId    Int
+  type      NotificationType
+  priority  NotificationPriority @default(NORMAL)
+  title     String
+  body      String?
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime             @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // складений індекс під запит «непрочитані сповіщення користувача, свіжі спочатку»
+  @@index([userId, readAt])
+  @@index([createdAt])
+}
+
+// Outbox подій реального часу: кожна подія спочатку пишеться сюди (порядковий id),
+// тому клієнт після перепідключення може запросити пропущені події (lastEventId)
+model EventOutbox {
+  id        BigInt   @id @default(autoincrement())
+  event     String
+  room      String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  // складений індекс під replay: події кімнати за порядковим номером
+  @@index([room, id])
 }
 
 // Журнал дій користувачів (рівень 3: аудит)

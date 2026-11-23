@@ -1,0 +1,24 @@
+# GET /metrics (ADMIN) після smoke + ws-demo:
+{
+  "uptimeSeconds": 42,
+  "counters": {
+    "httpRequestsTotal": 39,
+    "queueEnqueued": 27,
+    "queueProcessed": 27,
+    "eventsPublished": 21,
+    "notificationsSent": 5
+  },
+  "gauges": {
+    "onlineUsers": 0
+  },
+  "queues": {
+    "audit": {
+      "pending": 0,
+      "running": false
+    },
+    "outbox-cleanup": {
+      "pending": 0,
+      "running": false
+    }
+  }
+}

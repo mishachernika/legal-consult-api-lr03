@@ -4,6 +4,12 @@ import { AppError } from '../utils/AppError.js';
 import { assertValid } from '../utils/validate.js';
 import { parseId } from '../utils/params.js';
 import { parsePagination, paginate } from '../utils/pagination.js';
+import { onlineUserIds } from '../socket/presence.js';
+
+// Хто зараз онлайн (за WebSocket-з'єднаннями)
+export async function getOnlineUsers(req, res) {
+  res.json({ data: onlineUserIds() });
+}
 
 const ROLES = 'CLIENT,LAWYER,ADMIN';
 

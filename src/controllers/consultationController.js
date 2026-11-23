@@ -2,6 +2,9 @@ import { consultationModel } from '../models/consultationModel.js';
 import { userModel } from '../models/userModel.js';
 import { lawyerModel } from '../models/lawyerModel.js';
 import { reviewModel } from '../models/reviewModel.js';
+import { publishEvent } from '../socket/emitter.js';
+import { createNotification } from '../services/notificationService.js';
+import { cacheInvalidate } from '../utils/cache.js';
 import { AppError } from '../utils/AppError.js';
 import { assertValid } from '../utils/validate.js';
 import { parseId } from '../utils/params.js';
@@ -95,6 +98,20 @@ export async function createConsultation(req, res) {
     // якщо адмін ціну не передав, беремо погодинну ставку юриста
     price: price ?? lawyerProfile.pricePerHour,
   });
+
+  // real-time: подія в outbox + розсилка в кімнату консультації та персональні кімнати сторін
+  await publishEvent(`consultation:${consultation.id}`, 'consultation:created', { consultation });
+  await publishEvent(`user:${clientId}`, 'consultation:created', { consultation });
+  await publishEvent(`user:${lawyerId}`, 'consultation:created', { consultation });
+  await createNotification({
+    userId: lawyerId,
+    type: 'CONSULTATION_CREATED',
+    priority: 'HIGH',
+    title: 'Нова консультація',
+    body: `${topic} — клієнт ${client.name}`,
+    data: { consultationId: consultation.id },
+  });
+
   res.status(201).json({ data: consultation });
 }
 
@@ -158,6 +175,24 @@ export async function updateConsultation(req, res) {
   }
 
   const updated = await consultationModel.update(id, data);
+
+  await publishEvent(`consultation:${id}`, 'consultation:updated', { consultation: updated, changed: Object.keys(data) });
+  await publishEvent(`user:${consultation.clientId}`, 'consultation:updated', { consultation: updated, changed: Object.keys(data) });
+  await publishEvent(`user:${consultation.lawyerId}`, 'consultation:updated', { consultation: updated, changed: Object.keys(data) });
+
+  // сповіщення другій стороні про зміну статусу
+  if (data.status && data.status !== consultation.status) {
+    const notifyUserId = req.user.userId === consultation.clientId ? consultation.lawyerId : consultation.clientId;
+    await createNotification({
+      userId: notifyUserId,
+      type: data.status === 'CANCELLED' ? 'CONSULTATION_CANCELLED' : 'CONSULTATION_UPDATED',
+      priority: data.status === 'CANCELLED' ? 'HIGH' : 'NORMAL',
+      title: data.status === 'CANCELLED' ? 'Консультацію скасовано' : 'Статус консультації змінено',
+      body: `«${consultation.topic}» → ${data.status}`,
+      data: { consultationId: id, status: data.status },
+    });
+  }
+
   res.json({ data: updated });
 }
 
@@ -167,6 +202,7 @@ async function recalcLawyerRatingSafe(lawyerId) {
   if (!profile) return;
   const avg = await reviewModel.avgRating(lawyerId);
   await lawyerModel.setRatingByUserId(lawyerId, avg);
+  await cacheInvalidate('lawyers'); // рейтинг у каталозі міг змінитися
 }
 
 // Видалення: адмін завжди, клієнт — лише власну consultation у статусі PENDING
@@ -184,5 +220,10 @@ export async function deleteConsultation(req, res) {
   await consultationModel.remove(id); // відгук видалиться каскадом
   // але рейтинг юриста треба перерахувати вручну
   if (consultation.review) await recalcLawyerRatingSafe(consultation.lawyerId);
+
+  await publishEvent(`consultation:${id}`, 'consultation:deleted', { id });
+  await publishEvent(`user:${consultation.clientId}`, 'consultation:deleted', { id });
+  await publishEvent(`user:${consultation.lawyerId}`, 'consultation:deleted', { id });
+
   res.status(204).end();
 }

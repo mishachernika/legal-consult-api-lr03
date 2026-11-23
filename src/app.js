@@ -13,7 +13,12 @@ import consultationRoutes from './routes/consultationRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import fileRoutes from './routes/fileRoutes.js';
 import auditRoutes from './routes/auditRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
+import { authenticate } from './middleware/auth.js';
+import { authorize } from './middleware/authorize.js';
+import { metrics } from './utils/metrics.js';
+import { queueStats } from './utils/queue.js';
 
 const app = express();
 
@@ -29,6 +34,20 @@ app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Метрики для моніторингу: лічильники HTTP/WS/черг + gauge (онлайн, uptime)
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    metrics.inc('httpRequestsTotal');
+    if (res.statusCode >= 500) metrics.inc('httpErrorsTotal');
+  });
+  next();
+});
+
+// Моніторинг (рівень 3): метрики застосунку, лише для адміна
+app.get('/metrics', authenticate, authorize('ADMIN'), (req, res) => {
+  res.json({ ...metrics.snapshot(), queues: queueStats() });
 });
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, { explorer: true }));
@@ -68,6 +87,7 @@ app.use('/api/consultations', consultationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/audit-logs', auditRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -2,9 +2,12 @@ import { specializationModel } from '../models/specializationModel.js';
 import { AppError } from '../utils/AppError.js';
 import { assertValid } from '../utils/validate.js';
 import { parseId } from '../utils/params.js';
+import { cacheWrap, cacheInvalidate } from '../utils/cache.js';
 
 export async function getSpecializations(req, res) {
-  res.json({ data: await specializationModel.findAll() });
+  // довідник рідко змінюється — кешуємо на 60 с
+  const data = await cacheWrap('specializations', 'all', 60, () => specializationModel.findAll());
+  res.json({ data });
 }
 
 export async function getSpecializationById(req, res) {
@@ -25,6 +28,7 @@ export async function createSpecialization(req, res) {
   if (existing) throw new AppError(409, 'Така спеціалізація вже існує');
 
   const specialization = await specializationModel.create({ name, description });
+  await cacheInvalidate('specializations');
   res.status(201).json({ data: specialization });
 }
 
@@ -47,11 +51,13 @@ export async function updateSpecialization(req, res) {
   if (description !== undefined) data.description = description;
 
   const specialization = await specializationModel.update(id, data);
+  await cacheInvalidate('specializations');
   res.json({ data: specialization });
 }
 
 export async function deleteSpecialization(req, res) {
   const id = parseId(req.params.id, 'ідентифікатор спеціалізації');
   await specializationModel.remove(id);
+  await cacheInvalidate('specializations');
   res.status(204).end();
 }
