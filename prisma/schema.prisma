@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CLIENT
+  LAWYER
+  ADMIN
+}
+
+enum ConsultationStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  password     String
+  name         String
+  phone        String?
+  role         Role      @default(CLIENT)
+  avatar       String?
+  totpSecret   String?
+  totpEnabled  Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  lawyerProfile         LawyerProfile?
+  consultationsAsClient Consultation[] @relation("ClientConsultations")
+  consultationsAsLawyer Consultation[] @relation("LawyerConsultations")
+  messages              Message[]
+  reviews               Review[]
+  reviewsAbout          Review[]       @relation("LawyerReviews")
+  files                 File[]
+  refreshTokens         RefreshToken[]
+  resetTokens           PasswordResetToken[]
+  auditLogs             AuditLog[]
+
+  @@index([role])
+}
+
+model LawyerProfile {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  bio             String?
+  experienceYears Int      @default(0)
+  pricePerHour    Decimal  @default(0) @db.Decimal(10, 2)
+  rating          Decimal? @db.Decimal(2, 1)
+  isVerified      Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Неявний зв'язок many-to-many: юрист ↔ сфери права
+  specializations Specialization[]
+
+  @@index([pricePerHour])
+}
+
+model Specialization {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  description String?
+
+  lawyers LawyerProfile[]
+}
+
+model Consultation {
+  id          Int                @id @default(autoincrement())
+  clientId    Int
+  lawyerId    Int
+  topic       String
+  description String
+  status      ConsultationStatus @default(PENDING)
+  scheduledAt DateTime?
+  price       Decimal?           @db.Decimal(10, 2)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  client   User      @relation("ClientConsultations", fields: [clientId], references: [id])
+  lawyer   User      @relation("LawyerConsultations", fields: [lawyerId], references: [id])
+  messages Message[]
+  review   Review?
+  files    File[]
+
+  @@index([clientId])
+  @@index([lawyerId])
+  @@index([status])
+}
+
+model Message {
+  id             Int      @id @default(autoincrement())
+  consultationId Int
+  senderId       Int
+  text           String
+  createdAt      DateTime @default(now())
+
+  consultation Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id])
+
+  @@index([consultationId])
+}
+
+model Review {
+  id             Int      @id @default(autoincrement())
+  consultationId Int      @unique
+  clientId       Int
+  lawyerId       Int
+  rating         Int
+  text           String?
+  createdAt      DateTime @default(now())
+
+  consultation Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  client       User         @relation(fields: [clientId], references: [id])
+  lawyer       User         @relation("LawyerReviews", fields: [lawyerId], references: [id])
+
+  @@index([lawyerId])
+  @@index([rating])
+}
+
+// Завантажений файл (документ/зображення), можна прив'язати до консультації
+model File {
+  id             Int      @id @default(autoincrement())
+  filename       String
+  originalName   String
+  mimetype       String
+  size           Int
+  path           String
+  uploadedBy     Int
+  consultationId Int?
+  createdAt      DateTime @default(now())
+
+  user         User          @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  consultation Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+
+  @@index([uploadedBy])
+  @@index([consultationId])
+}
+
+// Refresh-токени зберігаємо лише у вигляді SHA-256 хешу — так їх можна відкликати
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  tokenHash String    @unique
+  userId    Int
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Токени відновлення паролю (відправляємо посилання на email)
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  tokenHash String    @unique
+  userId    Int
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Журнал дій користувачів (рівень 3: аудит)
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String
+  entity    String?
+  entityId  Int?
+  details   Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}

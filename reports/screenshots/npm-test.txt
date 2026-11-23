@@ -1,0 +1,68 @@
+
+> legal-consult-api@1.0.0 test
+> npm run db:test && NODE_ENV=test node --env-file-if-exists=.env.test --test "tests/**/*.test.js"
+
+
+> legal-consult-api@1.0.0 db:test
+> NODE_ENV=test prisma migrate deploy
+
+◇ injected env (2) from .env.test
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+Datasource "db": PostgreSQL database "legal_consult_test", schema "public" at "localhost:5433"
+
+2 migrations found in prisma/migrations
+
+
+No pending migrations to apply.
+▶ Health
+  ✔ GET /health повертає статус ok (7.988709ms)
+✔ Health (67.201459ms)
+▶ Users API
+  ✔ POST /api/users створює клієнта (21.443916ms)
+  ✔ POST /api/users з невалідним email → 400 з деталями (2.685958ms)
+  ✔ POST /api/users з коротким ім'ям → 400 (1.277417ms)
+  ✔ POST /api/users з дублем email → 409 (1.818875ms)
+  ✔ GET /api/users?role=LAWYER фільтрує за роллю (10.93425ms)
+  ✔ GET /api/users/:id → 404 для неіснуючого (3.836625ms)
+  ✔ PUT /api/users/:id оновлює ім'я (5.91475ms)
+  ✔ DELETE /api/users/:id → 204, повторний → 404 (6.76525ms)
+✔ Users API (55.000708ms)
+▶ Specializations API
+  ✔ CRUD: створення, дубль → 409, список, видалення (9.910166ms)
+✔ Specializations API (9.994792ms)
+▶ Lawyers API
+  ✔ POST /api/lawyers створює профіль із спеціалізацією і роллю LAWYER (16.742125ms)
+  ✔ POST /api/lawyers повторно для того самого userId → 409 (2.903625ms)
+  ✔ POST /api/lawyers з неіснуючою спеціалізацією → 400 (5.629834ms)
+  ✔ POST /api/lawyers з неіснуючим користувачем → 404 (1.726375ms)
+  ✔ GET /api/lawyers?specializationId= фільтрує за сферою права (9.591083ms)
+  ✔ GET /api/lawyers/:id → 404 для неіснуючого профілю (2.616833ms)
+✔ Lawyers API (43.239083ms)
+▶ Consultations API
+  ✔ POST /api/consultations — ціна за замовчуванням = ставка юриста, статус PENDING (4.9975ms)
+  ✔ POST /api/consultations з неіснуючим юристом → 404 (2.684833ms)
+  ✔ PUT /api/consultations/:id — зміна статусу (3.396667ms)
+  ✔ PUT /api/consultations/:id з невалідним статусом → 400 (2.93975ms)
+  ✔ POST /:id/messages від сторонньої особи → 403 (4.770084ms)
+  ✔ POST /:id/messages від клієнта → 201, GET повертає історію (6.634ms)
+  ✔ GET /api/consultations?status=CONFIRMED фільтрує (2.103625ms)
+✔ Consultations API (39.073875ms)
+▶ Reviews API
+  ✔ відгук до завершення консультації → 400 (3.690417ms)
+  ✔ після COMPLETED відгук створюється, дубль → 409, рейтинг юриста оновлюється (20.634542ms)
+  ✔ рейтинг поза діапазоном 1-5 → 400 (9.884667ms)
+✔ Reviews API (34.324833ms)
+▶ Обробка помилок
+  ✔ невідомий маршрут → 404 у форматі JSON (0.915ms)
+  ✔ невалідний id у шляху → 400 (1.035875ms)
+✔ Обробка помилок (2.018625ms)
+ℹ tests 28
+ℹ suites 7
+ℹ pass 28
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 494.44575

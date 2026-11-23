@@ -1,0 +1,114 @@
+$ curl -s http://localhost:3000/health
+{
+  "status": "ok",
+  "timestamp": "2026-11-21T12:01:01.502Z"
+}
+
+# список юристів, сортування за ціною (перші 2 записи)
+$ curl -s 'http://localhost:3000/api/lawyers?sortBy=pricePerHour&order=asc'
+{
+  "data": [
+    {
+      "id": 14,
+      "userId": 37,
+      "bio": "Юрист із сімейних спорів, медіатор. Допомагаю мирно врегулювати конфлікти.",
+      "experienceYears": 8,
+      "pricePerHour": "700",
+      "rating": null,
+      "isVerified": true,
+      "user": {
+        "id": 37,
+        "name": "Шевченко Олена Петрівна",
+        "email": "olena.shevchenko@legal.ua",
+        "phone": "+380672223344",
+        "role": "LAWYER"
+      },
+      "specializations": [
+        {
+          "id": 27,
+          "name": "Сімейне право",
+          "description": "Розірвання шлюбу, аліменти, поділ майна, опіка над дитиною"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "userId": 36,
+      "bio": "Адвокат, 12 років практики. Спеціалізація на нерухомості та договірному праві.",
+      "experienceYears": 12,
+      "pricePerHour": "900",
+      "rating": "5",
+      "isVerified": true,
+      "user": {
+        "id": 36,
+        "name": "Петренко Іван Олексійович",
+        "email": "ivan.petrenko@legal.ua",
+        "phone": "+380671112233",
+        "role": "LAWYER"
+      },
+      "specializations": [
+        {
+          "id": 25,
+          "name": "Цивільне право",
+          "description": "Договори, нерухомість, відшкодування шкоди, спадщина"
+        },
+        {
+          "id": 28,
+          "name": "Господарське право",
+          "description": "Господарські спори, договори між підприємствами, банкрутство"
+        }
+      ]
+    }
+  ]
+}
+
+# створення консультації (ціна за замовчуванням = ставка юриста); clientId=40 lawyerId=37
+$ curl -s -X POST http://localhost:3000/api/consultations -H 'Content-Type: application/json' -d '{...}'
+{
+  "data": {
+    "id": 24,
+    "clientId": 40,
+    "lawyerId": 37,
+    "topic": "Договір купівлі квартири",
+    "description": "Перевірити договір купівлі-продажу квартири та оцінити ризики для покупця.",
+    "status": "PENDING",
+    "scheduledAt": null,
+    "price": "700",
+    "createdAt": "2026-11-21T12:01:01.644Z",
+    "updatedAt": "2026-11-21T12:01:01.644Z",
+    "client": {
+      "id": 40,
+      "name": "Бондар Тарас Романович",
+      "email": "taras.bondar@example.com"
+    },
+    "lawyer": {
+      "id": 37,
+      "name": "Шевченко Олена Петрівна",
+      "email": "olena.shevchenko@legal.ua"
+    }
+  }
+}
+
+# помилка валідації → 400 з деталями по полях
+$ curl -s -X POST http://localhost:3000/api/users -d '{"email":"bad","name":"A"}'
+{
+  "error": "Помилка валідації даних",
+  "details": {
+    "email": [
+      "невірний формат email"
+    ],
+    "name": [
+      "мінімальна довжина — 2 символів"
+    ]
+  }
+}
+
+# невідомий маршрут → 404
+$ curl -s http://localhost:3000/api/nope
+{
+  "error": "Маршрут не знайдено: GET /api/nope"
+}
+
+# прибирання демо-запису
+$ curl -s -X DELETE http://localhost:3000/api/consultations/24 -o /dev/null -w '%{http_code}'
+204

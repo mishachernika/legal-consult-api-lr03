@@ -1,0 +1,8 @@
+node_modules/
+.env
+.env.test
+src/generated/
+uploads/
+stats.html
+*.log
+.DS_Store

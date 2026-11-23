@@ -1,0 +1,118 @@
+$ curl -s http://localhost:3000/health
+{
+  "status": "ok",
+  "timestamp": "2026-11-22T19:53:44.433Z"
+}
+
+# список юристів, сортування за ціною (перші 2 записи), пагінація
+$ curl -s 'http://localhost:3000/api/lawyers?sortBy=pricePerHour&order=asc&limit=2'
+{
+  "data": [
+    {
+      "id": 2,
+      "userId": 3,
+      "bio": "Юрист із сімейних спорів, медіатор. Допомагаю мирно врегулювати конфлікти.",
+      "experienceYears": 8,
+      "pricePerHour": "700",
+      "rating": null,
+      "isVerified": true,
+      "user": {
+        "id": 3,
+        "name": "Шевченко Олена Петрівна",
+        "email": "olena.shevchenko@legal.ua",
+        "phone": "+380672223344",
+        "role": "LAWYER"
+      },
+      "specializations": [
+        {
+          "id": 3,
+          "name": "Сімейне право",
+          "description": "Розірвання шлюбу, аліменти, поділ майна, опіка над дитиною"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "userId": 2,
+      "bio": "Адвокат, 12 років практики. Спеціалізація на нерухомості та договірному праві.",
+      "experienceYears": 12,
+      "pricePerHour": "900",
+      "rating": "5",
+      "isVerified": true,
+      "user": {
+        "id": 2,
+        "name": "Петренко Іван Олексійович",
+        "email": "ivan.petrenko@legal.ua",
+        "phone": "+380671112233",
+        "role": "LAWYER"
+      },
+      "specializations": [
+        {
+          "id": 1,
+          "name": "Цивільне право",
+          "description": "Договори, нерухомість, відшкодування шкоди, спадщина"
+        },
+        {
+          "id": 4,
+          "name": "Господарське право",
+          "description": "Господарські спори, договори між підприємствами, банкрутство"
+        }
+      ]
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 2,
+    "total": 3,
+    "totalPages": 2,
+    "hasMore": true
+  }
+}
+
+# реєстрація нового клієнта → у відповіді пара JWT (access + refresh)
+$ curl -s -X POST http://localhost:3000/api/auth/register -H 'Content-Type: application/json' -d '{...}'
+{
+  "error": "Забагато спроб входу або запитів. Спробуйте пізніше"
+}
+
+# вхід демо-адміном із seed і створення консультації з Bearer-токеном
+$ TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login -d '{"email":"admin@legal.ua","password":"password123"}' | jq -r .tokens.accessToken)
+[eval]:1
+let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).tokens.accessToken))
+                                                                                       ^
+
+TypeError: Cannot read properties of undefined (reading 'accessToken')
+    at Socket.<anonymous> ([eval]:1:88)
+    at Socket.emit (node:events:526:24)
+    at endReadableNT (node:internal/streams/readable:1783:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+
+Node.js v24.22.3
+$ curl -s http://localhost:3000/api/consultations -H "Authorization: Bearer $TOKEN" | ...
+[eval]:1
+let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);console.log(JSON.stringify({data:j.data.slice(0,2),pagination:j.pagination},null,2))})
+                                                                                                                      ^
+
+TypeError: Cannot read properties of undefined (reading 'slice')
+    at Socket.<anonymous> ([eval]:1:119)
+    at Socket.emit (node:events:526:24)
+    at endReadableNT (node:internal/streams/readable:1783:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+
+Node.js v24.22.3
+
+# без токена захищений маршрут повертає 401
+$ curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/users
+401
+
+# помилка валідації → 400 з деталями по полях
+$ curl -s -X POST http://localhost:3000/api/auth/register -d '{"email":"bad","password":"short","name":"A"}'
+{
+  "error": "Забагато спроб входу або запитів. Спробуйте пізніше"
+}
+
+# невідомий маршрут → 404
+$ curl -s http://localhost:3000/api/nope
+{
+  "error": "Маршрут не знайдено: GET /api/nope"
+}

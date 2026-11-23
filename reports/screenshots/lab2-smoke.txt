@@ -1,0 +1,37 @@
+Smoke-тест проти http://localhost:3000
+
+PASS  GET /health → 200 ok
+PASS  GET /api/lawyers → пагінований список, сортування за ціною
+  перший у списку: Шевченко Олена Петрівна, 700 грн/год, сфер: 1
+PASS  GET /api/specializations → довідник сфер права
+PASS  POST /api/auth/register → 201 + пара токенів, без пароля у відповіді
+PASS  POST /api/auth/login з хибним паролем → 401
+PASS  POST /api/auth/refresh → ротація: новий refresh токен
+PASS  повторне використання старого refresh токена → 401
+PASS  вхід адміном (admin@legal.ua / password123) → 200
+PASS  вхід юристом (olena.shevchenko@legal.ua) → 200
+PASS  GET /api/users без токена → 401
+PASS  GET /api/users клієнтом → 403 (email/телефони всіх бачить лише адмін)
+PASS  GET /api/users адміном → 200, пагінація, без паролів
+PASS  POST /api/consultations (клієнт, без clientId) → 201, PENDING, ціна = ставка юриста
+PASS  POST /api/consultations без токена → 401
+PASS  POST /api/consultations із price від клієнта → 403
+PASS  GET /api/consultations/:id стороннім → 403
+PASS  PUT /api/consultations/:id юристом → CONFIRMED
+PASS  PUT з невалідним статусом → 400 з деталями
+PASS  POST /:id/messages від клієнта → 201 (sender = поточний користувач)
+PASS  POST /:id/messages від стороннього → 403
+PASS  POST /api/files/upload (png) → 201, без server path у відповіді
+PASS  GET /api/files/:id → 200 (публічно)
+PASS  POST /api/files/upload (.exe) → 400
+PASS  POST /api/files/upload (підроблений вміст) → 400 магічні байти
+PASS  POST /api/reviews після COMPLETED → 201
+PASS  дубль відгуку → 409
+PASS  GET /api/lawyers/:id → рейтинг перераховано
+PASS  GET /api/audit-logs клієнтом → 403
+PASS  GET /api/audit-logs адміном → 200 зі списком дій
+PASS  POST /api/auth/register з невалідними даними → 400 з деталями
+PASS  невідомий маршрут → 404 JSON
+PASS  невалідний id → 400
+
+Разом: 32 пройдено, 0 провалено

@@ -1,0 +1,49 @@
+{
+  "name": "legal-consult-api",
+  "version": "1.0.0",
+  "description": "REST API онлайн-платформи юридичних консультацій — серверна частина (лабораторні роботи 1-3)",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node --env-file=.env --watch src/server.js",
+    "start": "node --env-file=.env src/server.js",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "node prisma/seed.js",
+    "db:test": "NODE_ENV=test prisma migrate deploy && NODE_ENV=test prisma generate",
+    "test": "npm run db:test && NODE_ENV=test node --env-file-if-exists=.env.test --test --test-concurrency=1 \"tests/**/*.test.js\""
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "argon2": "^0.45.2",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.5",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.5.0",
+    "nodemailer": "^10.6.1",
+    "otplib": "^13.6.0",
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "prisma": "^7.10.1",
+    "supertest": "^7.3.2"
+  },
+  "allowScripts": {
+    "prisma@7.10.1": true,
+    "@prisma/engines@7.10.1": true,
+    "argon2@0.45.2": true
+  }
+}

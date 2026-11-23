@@ -1,0 +1,21 @@
+Smoke-тест проти http://localhost:3000
+
+PASS  GET /health → 200 ok
+PASS  GET /api/lawyers → список, відсортований за ціною
+  перший у списку: Шевченко Олена Петрівна, 700 грн/год, сфер: 1
+PASS  GET /api/specializations → довідник сфер права
+PASS  POST /api/users → 201
+PASS  POST /api/consultations → 201, ціна = ставка юриста
+PASS    статус нової консультації PENDING
+PASS  PUT /api/consultations/:id → статус CONFIRMED
+PASS  PUT з невалідним статусом → 400
+PASS  POST /:id/messages від клієнта → 201
+PASS  POST /:id/messages від стороннього → 403
+PASS  POST /api/reviews після COMPLETED → 201
+PASS  дубль відгуку → 409
+PASS  GET /api/lawyers/:id → рейтинг перераховано
+PASS  POST /api/users з невалідними даними → 400 з деталями
+PASS  невідомий маршрут → 404 JSON
+PASS  невалідний id → 400
+
+Разом: 16 пройдено, 0 провалено
