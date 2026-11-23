@@ -202,7 +202,7 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // складений індекс під запит «непрочитані сповіщення користувача, свіжі спочатку»
-  @@index([userId, readAt])
+  @@index([userId, readAt, createdAt(sort: Desc)])
   @@index([createdAt])
 }
 
