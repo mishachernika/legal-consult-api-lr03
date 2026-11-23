@@ -99,12 +99,16 @@ router.get('/consultation/:id', authenticate, getConsultationFiles);
  * @swagger
  * /api/files/{id}:
  *   get:
- *     summary: Завантаження файлу за ID (публічно)
+ *     summary: Завантаження файлу за ID (власник, учасник консультації або адміністратор)
  *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: integer } }
  *     responses:
  *       200: { description: Вміст файлу }
+ *       401: { description: Необхідна аутентифікація }
+ *       403: { description: Немає доступу до файлу }
  *       404: { description: Файл не знайдено }
  *   delete:
  *     summary: Видалення файлу (власник або адмін)
@@ -118,7 +122,7 @@ router.get('/consultation/:id', authenticate, getConsultationFiles);
  *       403: { description: Недостатньо прав }
  *       404: { description: Файл не знайдено }
  */
-router.get('/:id', getFile);
+router.get('/:id', authenticate, getFile);
 router.delete('/:id', authenticate, deleteFile);
 
 export default router;

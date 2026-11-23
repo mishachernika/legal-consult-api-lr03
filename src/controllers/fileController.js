@@ -87,6 +87,21 @@ export async function getFile(req, res) {
   const id = parseId(req.params.id, 'ідентифікатор файлу');
   const file = await fileModel.findById(id);
   if (!file) throw new AppError(404, 'Файл не знайдено');
+
+  // Юридичні документи не можуть бути публічними: доступ має власник,
+  // адміністратор або учасник консультації, до якої прив'язано файл.
+  const isOwnerOrAdmin = file.uploadedBy === req.user.userId || req.user.role === 'ADMIN';
+  let isConsultationParticipant = false;
+  if (file.consultationId) {
+    const consultation = await consultationModel.findByIdCore(file.consultationId);
+    isConsultationParticipant = Boolean(
+      consultation && (consultation.clientId === req.user.userId || consultation.lawyerId === req.user.userId)
+    );
+  }
+  if (!isOwnerOrAdmin && !isConsultationParticipant) {
+    throw new AppError(403, 'Ви не маєте доступу до цього файлу');
+  }
+
   res.sendFile(path.resolve(file.path));
 }
 

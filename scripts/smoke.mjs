@@ -144,8 +144,10 @@ async function main() {
     up.status === 201 && up.body.file?.path === undefined);
   const fileId = up.body.file?.id;
   if (fileId) {
-    const getFile = await req('GET', `/api/files/${fileId}`);
-    check('GET /api/files/:id → 200 (публічно)', getFile.status === 200);
+    const publicGet = await req('GET', `/api/files/${fileId}`);
+    check('GET /api/files/:id без токена → 401', publicGet.status === 401);
+    const getFile = await req('GET', `/api/files/${fileId}`, { token: clientToken });
+    check('GET /api/files/:id власником → 200', getFile.status === 200);
   }
   const exeForm = new FormData();
   exeForm.append('file', new Blob([png], { type: 'application/x-msdownload' }), 'virus.exe');
